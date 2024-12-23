@@ -17,6 +17,7 @@
       "backgroundColor": "#ffffff"
     },
     "android": {
+      "package": "com.tapajosprice",
       "permissions": [
         "CAMERA"
       ],

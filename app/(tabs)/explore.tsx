@@ -11,7 +11,20 @@ import { RouteProp } from '@react-navigation/native';
 
 export default function TabTwoScreen() {
   const route = useRoute<RouteProp<{ params: { eanList: { competitor: string; ean: string; price: string }[] } }, 'params'>>();
-  const { eanList } = route.params; 
+  
+  // Verificação de segurança para evitar erro ao acessar eanList
+  const eanList = route.params?.eanList || [];  
+
+  const sanitizeData = (item: any) => {
+    const validItem: any = {};
+    for (const key in item) {
+      if (item[key] !== undefined && item[key] !== null && !isNaN(item[key])) {
+        validItem[key] = item[key];
+      }
+    }
+
+    return validItem;
+  };
   
   return (
     <ParallaxScrollView
@@ -27,13 +40,17 @@ export default function TabTwoScreen() {
         <ThemedView style={styles.titleContainer}>
         <ThemedText type="title">Lista de EANs</ThemedText>
       </ThemedView>
-      {eanList.map((item, index) => (
-        <ThemedView key={index} style={styles.itemContainer}>
-          <ThemedText>Concorrente: {item.competitor}</ThemedText>
-          <ThemedText>EAN: {item.ean}</ThemedText>
-          <ThemedText>Preço: {item.price}</ThemedText>
-        </ThemedView>
-      ))}
+      {eanList.map((item, index) => {
+        const validItem = sanitizeData(item); // Filtra o item para remover valores inválidos
+
+        return (
+          <ThemedView key={index} style={styles.itemContainer}>
+            {validItem.competitor && <ThemedText>Concorrente: {validItem.competitor}</ThemedText>}
+            {validItem.ean && <ThemedText>EAN: {validItem.ean}</ThemedText>}
+            {validItem.price && <ThemedText>Preço: {validItem.price}</ThemedText>}
+          </ThemedView>
+        );
+      })}
     </ParallaxScrollView>
   );
 }

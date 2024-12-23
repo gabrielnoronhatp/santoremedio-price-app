@@ -15,9 +15,6 @@ import { Picker } from "@react-native-picker/picker";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from '@react-navigation/stack';
 
-
-
-
 export type RootStackParamList = {
   Home: undefined;
   explore: { eanList: { competitor: string; ean: string; price: string }[] }; 
@@ -25,21 +22,17 @@ export type RootStackParamList = {
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
-
 export default function HomeScreen() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [ean, setEan] = useState<string>("");
-  const [price, setPrice] = useState<string>("");
+  const [ean, setEan] = useState<string>(""); 
+  const [price, setPrice] = useState<string>(""); 
   const [selectedStore, setSelectedStore] = useState<string>("Drogasil");
   const [scanned, setScanned] = useState(false);
 
   const [eanList, setEanList] = useState<{ competitor: string; ean: string; price: string }[]>([]);
 
   const navigation = useNavigation<HomeScreenNavigationProp>();
-
-
-
 
   useEffect(() => {
     (async () => {
@@ -52,6 +45,67 @@ export default function HomeScreen() {
     console.log("Código de barras lido:", data);
     setEan(data); 
     setScanning(false); 
+    fetchProductByEan(data); // Adiciona a busca do produto
+  };
+
+  // Função para buscar os produtos na API com o EAN
+  // Função para buscar os produtos na API com o EAN
+  const fetchProductByEan = async (ean: string) => {
+    try {
+      const response = await fetch('http://10.2.10.202:5034/api/filtro_por', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'accept': 'application/json',
+        },
+        body: JSON.stringify({
+          filtros: [
+            {
+              filtro: "ean",
+              valor: ean,
+            },
+          ],
+          page: 1,
+          page_size: 24,
+        }),
+      });
+  
+      const data = await response.json();
+      console.log('Produtos encontrados:', data); // Log dos produtos encontrados
+      if (data && data.length > 0) {
+        // Se produtos forem encontrados, adicione-os à lista
+        const newEanList = data.map((product: any) => ({
+          competitor: product.tabela, // Usando o campo 'tabela' como loja
+          ean: product.ean.toString(), // Convertendo o EAN para string
+          price: product.preco.toString(), // Convertendo o preço para string
+        }));
+  
+        // Verifica se o EAN já foi adicionado à lista para evitar duplicatas
+        setEanList(prevList => {
+          const updatedList = [...prevList];
+          newEanList.forEach((item: any) => {
+            if (!updatedList.some(existingItem => existingItem.ean === item.ean)) {
+              updatedList.push(item);
+            }
+          });
+          return updatedList;
+        });
+      } else {
+        Alert.alert('Nenhum produto encontrado com esse EAN.');
+      }
+    } catch (error) {
+      console.error('Erro ao buscar produtos:', error);
+      Alert.alert('Erro ao buscar produtos. Tente novamente mais tarde.');
+    }
+  };
+  
+
+
+  const handleEanChange = (value: string) => {
+    setEan(value);
+    if (value.length > 0) {
+      fetchProductByEan(value); // Chama a API ao digitar o EAN
+    }
   };
 
   if (hasPermission === null) {
@@ -68,13 +122,7 @@ export default function HomeScreen() {
     );
   }
 
-  const handleBarCodeScanned = ({
-    type,
-    data,
-  }: {
-    type: string;
-    data: string;
-  }) => {
+  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
     console.log("Código de barras lido:", data); 
     setEan(data); 
     setScanning(false); 
@@ -92,6 +140,7 @@ export default function HomeScreen() {
       navigation.navigate('explore', { eanList }); 
     }
   };
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: "#A1CEDC", dark: "#1D3D47" }}
@@ -107,7 +156,7 @@ export default function HomeScreen() {
       </ThemedView>
 
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Select a Store:</ThemedText>
+        <ThemedText type="subtitle">Selecione a loja:</ThemedText>
         <Picker
           selectedValue={selectedStore}
           onValueChange={(itemValue) => setSelectedStore(itemValue)}
@@ -125,7 +174,7 @@ export default function HomeScreen() {
         <TextInput
           style={styles.input}
           value={ean}
-          onChangeText={setEan}
+          onChangeText={handleEanChange}
           placeholder="EAN"
           keyboardType="numeric"
         />
@@ -161,7 +210,7 @@ export default function HomeScreen() {
         />
       </ThemedView>
 
-      <Button title="Ver lista de EANs" onPress={navigateToExplore} />
+      <Button title="Enviar EANs" onPress={navigateToExplore} />
     </ParallaxScrollView>
   );
 }
