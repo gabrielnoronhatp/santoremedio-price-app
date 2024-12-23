@@ -1,63 +1,175 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import React, { useState, useEffect } from "react";
+import {
+  Image,
+  StyleSheet,
+  TextInput,
+  View,
+  Button,
+  Alert,
+} from "react-native";
+import { Camera, CameraView } from "expo-camera"; 
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import ParallaxScrollView from "@/components/ParallaxScrollView";
+import { Picker } from "@react-native-picker/picker";
+import { useNavigation } from "@react-navigation/native";
+import { StackNavigationProp } from '@react-navigation/stack';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+
+
+
+export type RootStackParamList = {
+  Home: undefined;
+  explore: { eanList: { competitor: string; ean: string; price: string }[] }; 
+};
+
+type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
+
 
 export default function HomeScreen() {
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [ean, setEan] = useState<string>("");
+  const [price, setPrice] = useState<string>("");
+  const [selectedStore, setSelectedStore] = useState<string>("Drogasil");
+  const [scanned, setScanned] = useState(false);
+
+  const [eanList, setEanList] = useState<{ competitor: string; ean: string; price: string }[]>([]);
+
+  const navigation = useNavigation<HomeScreenNavigationProp>();
+
+
+
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === "granted");
+    })();
+  }, []);
+
+  const onBarcodeRead = ({ type, data }: { type: string; data: string }) => {
+    console.log("Código de barras lido:", data);
+    setEan(data); 
+    setScanning(false); 
+  };
+
+  if (hasPermission === null) {
+    return (
+      <ThemedText type="subtitle">Carregando permissão de câmera...</ThemedText>
+    );
+  }
+
+  if (hasPermission === false) {
+    return (
+      <ThemedText type="subtitle">
+        Permissão para acessar a câmera negada
+      </ThemedText>
+    );
+  }
+
+  const handleBarCodeScanned = ({
+    type,
+    data,
+  }: {
+    type: string;
+    data: string;
+  }) => {
+    console.log("Código de barras lido:", data); 
+    setEan(data); 
+    setScanning(false); 
+
+    setEanList(prevList => [
+      ...prevList,
+      { competitor: selectedStore, ean: data, price: price } 
+    ]);
+  };
+
+  const navigateToExplore = () => {
+    if (eanList.length === 0) {
+      Alert.alert("A lista de EANs está vazia.");
+    } else {
+      navigation.navigate('explore', { eanList }); 
+    }
+  };
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
+      headerBackgroundColor={{ light: "#A1CEDC", dark: "#1D3D47" }}
       headerImage={
         <Image
-          source={require('@/assets/images/partial-react-logo.png')}
+          source={require("@/assets/images/grupo-tapajos.png")}
           style={styles.reactLogo}
         />
-      }>
+      }
+    >
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
+        <ThemedText type="title">Insira o preço do produto!</ThemedText>
       </ThemedView>
+
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
+        <ThemedText type="subtitle">Select a Store:</ThemedText>
+        <Picker
+          selectedValue={selectedStore}
+          onValueChange={(itemValue) => setSelectedStore(itemValue)}
+          style={styles.picker}
+        >
+          <Picker.Item label="Drogasil" value="Drogasil" />
+          <Picker.Item label="Bom Preço" value="Bom Preço" />
+          <Picker.Item label="Drogaria" value="Drogaria" />
+          <Picker.Item label="Pague Menos" value="Pague Menos" />
+        </Picker>
       </ThemedView>
+
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
+        <ThemedText type="subtitle">Insira o EAN do produto:</ThemedText>
+        <TextInput
+          style={styles.input}
+          value={ean}
+          onChangeText={setEan}
+          placeholder="EAN"
+          keyboardType="numeric"
+        />
+        <Button title="Ler código EAN" onPress={() => setScanning(true)} />
       </ThemedView>
+
+      {scanning && (
+        <View style={styles.cameraContainer}>
+          <CameraView
+            style={styles.camera}
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            barcodeScannerSettings={{
+              barcodeTypes: ["ean13"],
+            }}
+          >
+            <View style={styles.overlay}>
+              <ThemedText type="subtitle">
+                Posicione o código de barras no campo
+              </ThemedText>
+            </View>
+          </CameraView>
+        </View>
+      )}
+
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
+        <ThemedText type="subtitle">Insira o preço do produto:</ThemedText>
+        <TextInput
+          style={styles.input}
+          value={price}
+          onChangeText={setPrice}
+          placeholder="Preço"
+          keyboardType="decimal-pad"
+        />
       </ThemedView>
+
+      <Button title="Ver lista de EANs" onPress={navigateToExplore} />
     </ParallaxScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   stepContainer: {
@@ -65,10 +177,44 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   reactLogo: {
-    height: 178,
-    width: 290,
+    height: 250,
+    width: 490,
     bottom: 0,
     left: 0,
-    position: 'absolute',
+    position: "absolute",
+  },
+  input: {
+    height: 40,
+    borderColor: "#ccc",
+    borderWidth: 1,
+    paddingLeft: 8,
+    marginTop: 8,
+    borderRadius: 4,
+  },
+  cameraContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "transparent",
+  },
+  camera: {
+    width: "100%",
+    height: 300,
+    borderRadius: 10,
+  },
+  overlay: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -100 }, { translateY: -20 }],
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    padding: 10,
+    borderRadius: 5,
+  },
+
+  picker: {
+    height: 50,
+    width: "100%",
+    backgroundColor: "#fff",
   },
 });
