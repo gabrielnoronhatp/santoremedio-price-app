@@ -9,7 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "O aplicativo precisa acessar suas fotos para salvar os arquivos CSV.",
+        "NSPhotoLibraryAddUsageDescription": "O aplicativo precisa de permissão para salvar arquivos na sua galeria."
+      }
     },
     "splash": {
       "image": "./assets/images/grupo-tapajos.png",
@@ -19,7 +23,12 @@
     "android": {
       "package": "com.tapajosprice",
       "permissions": [
-        "CAMERA"
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE",
+        "MEDIA_LIBRARY"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -50,10 +59,26 @@
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone",
           "recordAudioAndroid": true
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "O aplicativo precisa acessar suas fotos para salvar os arquivos CSV.",
+          "savePhotosPermission": "O aplicativo precisa de permissão para salvar arquivos na sua galeria.",
+          "isAccessMediaLocationEnabled": true
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "98cc6fd4-090b-4c3c-b773-fc690a7a7dd6"
+      }
     }
   }
 }

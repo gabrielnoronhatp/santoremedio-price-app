@@ -1,76 +1,186 @@
-import { StyleSheet, Image, Platform } from 'react-native';
+import React, { useEffect, useState } from "react";
+import { StyleSheet, View, TextInput, Button, Alert } from "react-native";
+import { useRoute } from "@react-navigation/native";
+import { RouteProp } from "@react-navigation/native";
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import { useRoute } from '@react-navigation/native';
-import { RouteProp } from '@react-navigation/native';
+import * as Sharing from 'expo-sharing';
+
+
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import ParallaxScrollView from "@/components/ParallaxScrollView";
+
+interface Product {
+  idprodutoint: number;
+  descricao: string;
+  marca: string;
+  codigoean: string;
+}   
 
 export default function TabTwoScreen() {
-  const route = useRoute<RouteProp<{ params: { eanList: { competitor: string; ean: string; price: string }[] } }, 'params'>>();
-  
-  // Verificação de segurança para evitar erro ao acessar eanList
-  const eanList = route.params?.eanList || [];  
+  const route =
+    useRoute<
+      RouteProp<
+        {
+          params: {
+            eanList: { competitor: string; ean: string; price: string; productName?: string; brand?: string; location?: { latitude: number; longitude: number; } | null; }[];
+          };
+        },
+        "params"
+      >
+    >();
 
-  const sanitizeData = (item: any) => {
-    const validItem: any = {};
-    for (const key in item) {
-      if (item[key] !== undefined && item[key] !== null && !isNaN(item[key])) {
-        validItem[key] = item[key];
-      }
+  const eanList = route.params?.eanList || [];
+  const [sanitizedEanList, setSanitizedEanList] = useState<any[]>([]);
+  const [eanInput, setEanInput] = useState<string>("");
+
+  useEffect(() => {
+    fetchAndSanitizeData(eanList);
+  }, [eanList]);
+
+  const fetchAndSanitizeData = async (list: any[]) => {
+    try {
+      const response = await fetch('https://price-app-bucket.s3.us-east-1.amazonaws.com/database/database_price.json');
+      const products: Product[] = await response.json();
+
+      const sanitizedData = list.map(item => {
+        const product = products.find(p => p.codigoean === item.ean);
+        return {
+          ...item,
+          productName: product?.descricao || 'Produto não encontrado',
+          brand: product?.marca || ''
+        };
+      });
+      setSanitizedEanList(sanitizedData);
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+      Alert.alert("Erro ao buscar dados. Tente novamente mais tarde.");
+    }
+  };
+
+  const handleAddEan = async () => {
+    if (!eanInput) {
+      Alert.alert("Por favor, insira um EAN.");
+      return;
     }
 
-    return validItem;
+    try {
+      const response = await fetch('https://price-app-bucket.s3.us-east-1.amazonaws.com/database/database_price.json');
+      const products: Product[] = await response.json();
+
+      const product = products.find(p => p.codigoean === eanInput);
+
+      if (product) {
+        const newItem = {
+          competitor: "Manual Entry",
+          ean: eanInput,
+          price: "N/A",
+          productName: product.descricao,
+          brand: product.marca
+        };
+
+        setSanitizedEanList(prevList => [...prevList, newItem]);
+        setEanInput(""); // Clear input after adding
+      } else {
+        Alert.alert("Produto não encontrado na base de dados.");
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+      Alert.alert("Erro ao buscar dados. Tente novamente mais tarde.");
+    }
+  };
+
+  const convertToCSV = (data: any[]) => {
+    const headers = ['Localization', 'Concorrente', 'IDProduto', 'PreçoColetado', 'NomeProduto', 'Marca'];
+    
+    const rows = data.map(item => [
+      item.location ? `${item.location.latitude},${item.location.longitude}` : "N/A",
+      item.competitor || "N/A",
+      item.ean || "N/A",
+      item.price || "N/A",
+      item.productName || "N/A",
+      item.brand || "N/A"
+    ]);
+  
+    const csvContent = [
+      headers.join(';'),
+      ...rows.map(row => row.join(';'))
+    ].join('\n');
+  
+    return csvContent;
   };
   
+  // Função para compartilhar o CSV
+  const exportToCSV = async (sanitizedEanList: any[]) => {
+    try {
+      if (sanitizedEanList.length === 0) {
+        Alert.alert("Aviso", "Não há dados para exportar!");
+        return;
+      }
+  
+      // Converte os dados para CSV
+      const csvContent = convertToCSV(sanitizedEanList);
+  
+      // Define o caminho do arquivo
+      const fileName = "eanList.csv";
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+  
+      // Salva o arquivo localmente
+      await FileSystem.writeAsStringAsync(fileUri, csvContent);
+  
+      // Verifica se o compartilhamento está disponível
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+      if (!isSharingAvailable) {
+        Alert.alert("Erro", "Compartilhamento não está disponível neste dispositivo.");
+        return;
+      }
+  
+      // Compartilha o arquivo CSV
+      await Sharing.shareAsync(fileUri);
+  
+    } catch (error) {
+      console.error("Erro ao compartilhar CSV:", error);
+      Alert.alert("Erro", "Não foi possível compartilhar o arquivo CSV.");
+    }
+  };
+  
+
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-        <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Lista de EANs</ThemedText>
-      </ThemedView>
-      {eanList.map((item, index) => {
-        const validItem = sanitizeData(item); // Filtra o item para remover valores inválidos
+      headerImage={require('@/assets/images/react-logo.png')}
+      headerBackgroundColor={{ dark: '#007933', light: '#007933' }}
+    >
+      
+      <Button title="Exportar para CSV" onPress={() => exportToCSV(sanitizedEanList)} />
 
-        return (
-          <ThemedView key={index} style={styles.itemContainer}>
-            {validItem.competitor && <ThemedText>Concorrente: {validItem.competitor}</ThemedText>}
-            {validItem.ean && <ThemedText>EAN: {validItem.ean}</ThemedText>}
-            {validItem.price && <ThemedText>Preço: {validItem.price}</ThemedText>}
-          </ThemedView>
-        );
-      })}
+      {sanitizedEanList.map((item, index) => (
+        <ThemedView key={index} style={styles.itemContainer}>
+          <ThemedText>Produto: {item.productName}</ThemedText>
+          <ThemedText>Marca: {item.brand}</ThemedText>
+          <ThemedText>Concorrente: {item.competitor}</ThemedText>
+          <ThemedText>EAN: {item.ean}</ThemedText>
+          <ThemedText>Preço: R$ {item.price}</ThemedText>
+        </ThemedView>
+      ))}
     </ParallaxScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
-  },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
   itemContainer: {
     marginBottom: 10,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: "#ccc",
     borderRadius: 5,
+  },
+  input: {
+    height: 40,
+    borderColor: 'gray',
+    borderWidth: 1,
+    marginBottom: 10,
+    paddingHorizontal: 10,
   },
 });
