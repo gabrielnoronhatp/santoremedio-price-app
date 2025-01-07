@@ -14,11 +14,10 @@ import { ThemedView } from "@/components/ThemedView";
 import ParallaxScrollView from "@/components/ParallaxScrollView";
 import { Picker } from "@react-native-picker/picker";
 import { useNavigation, NavigationProp } from "@react-navigation/native";
-import AntDesign from "@expo/vector-icons/AntDesign";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import "react-native-get-random-values";
 import * as Location from 'expo-location';
 import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { debounce } from 'lodash';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -43,6 +42,8 @@ export default function HomeScreen() {
   const [searchParameter, setSearchParameter] = useState<string>("ean");
   const [searchValue, setSearchValue] = useState<string>("");
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [database, setDatabase] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
 
   useEffect(() => {
@@ -63,10 +64,20 @@ export default function HomeScreen() {
         longitude: currentLocation.coords.longitude,
       });
 
-      // Load saved eanList from AsyncStorage
+      
       const savedEanList = await AsyncStorage.getItem('eanList');
       if (savedEanList) {
         setEanList(JSON.parse(savedEanList));
+      }
+
+      try {
+        const response = await fetch(
+          "https://price-app-bucket.s3.us-east-1.amazonaws.com/database/database_price.json"
+        );
+        const data = await response.json();
+        setDatabase(data);
+      } catch (error) {
+        console.error("Erro ao carregar banco de dados:", error);
       }
     })();
   }, []);
@@ -98,67 +109,52 @@ export default function HomeScreen() {
     ]);
   };
 
-  const handleSearch = async () => {
-    try {
-      const response = await fetch(
-        "https://price-app-bucket.s3.us-east-1.amazonaws.com/database/database_price.json"
-      );
-      const data = await response.json();
+  const updateSuggestions = debounce((text: string) => {
+    if (!text || text.length < 2) {
+      setSuggestions([]);
+      return;
+    }
 
+    const searchTerm = text.toLowerCase();
+    const newSuggestions = database
+      .filter((item: any) => {
+        const field = searchParameter === 'marca' ? item.marca : item.descricao;
+        return field.toLowerCase().includes(searchTerm);
+      })
+      .map((item: any) => searchParameter === 'marca' ? item.marca : item.descricao)
+      .filter((value, index, self) => self.indexOf(value) === index)
+      .slice(0, 5);
+
+    setSuggestions(newSuggestions);
+  }, 300);
+
+  const handleSearch = async () => {
+    if (!searchValue) {
+      Alert.alert("Aviso", "Por favor, preencha o parâmetro de busca");
+      return;
+    }
+
+    try {
       let product;
       if (searchParameter === "idprodutoint") {
-        product = data.find(
+        product = database.find(
           (item: any) => item[searchParameter] === parseInt(searchValue)
         );
       } else if (
         searchParameter === "descricao" ||
         searchParameter === "marca"
       ) {
-        product = data.find((item: any) =>
+        product = database.find((item: any) =>
           item[searchParameter]
             .toLowerCase()
             .includes(searchValue.toLowerCase())
         );
       } else {
-        product = data.find((item: any) => item.codigoean === searchValue);
+        product = database.find((item: any) => item.codigoean === searchValue);
       }
 
       if (product) {
-        Alert.alert(
-          "Produto encontrado",
-          `ID: ${product.idprodutoint}\nDescrição: ${product.descricao}\nMarca: ${product.marca}\nEAN: ${product.codigoean}`,
-          [
-            {
-              text: "Cancelar",
-              style: "cancel",
-            },
-            {
-              text: "Adicionar à lista",
-              onPress: () => {
-                if (price) {
-                  const newItem = {
-                    competitor: selectedStore,
-                    ean: product.codigoean,
-                    price: price,
-                    productName: product.descricao,
-                    brand: product.marca,
-                    location: location,
-                  };
-                  handleAddToEanList(newItem);
-
-                  navigation.navigate("explore", {
-                    eanList: [...eanList, newItem],
-                  });
-
-                  setPrice("");
-                  setSearchValue("");
-                } else {
-                  Alert.alert("Aviso", "Por favor, insira um preço antes de adicionar à lista");
-                }
-              },
-            },
-          ]
-        );
+        Alert.alert("Produto encontrado", `Produto: ${product.descricao}`);
       } else {
         Alert.alert("Aviso", "Produto não encontrado");
       }
@@ -169,25 +165,75 @@ export default function HomeScreen() {
   };
 
   const handleConfirm = () => {
-    if (!searchValue || !price) {
-      Alert.alert("Aviso", "Por favor, preencha o código do produto e o preço");
+    if (!searchValue || !price || !selectedStore) {
+      Alert.alert("Aviso", "Por favor, preencha todos os campos obrigatórios: código do produto, preço e loja");
       return;
     }
 
-    navigation.navigate("explore", {
-      eanList: [
-        ...eanList,
-        {
-          competitor: selectedStore,
-          ean: searchValue,
-          price: price,
-          location: location,
-        },
-      ],
+    const product = database.find((item: any) => {
+      if (searchParameter === "idprodutoint") {
+        return item[searchParameter] === parseInt(searchValue);
+      } else if (searchParameter === "descricao" || searchParameter === "marca") {
+        return item[searchParameter].toLowerCase() === searchValue.toLowerCase();
+      } else {
+        return item.codigoean === searchValue;
+      }
     });
 
-    setPrice("");
-    setSearchValue("");
+    if (product) {
+      Alert.alert(
+        "Confirmação",
+        "Deseja adicionar este produto à lista?",
+        [
+          {
+            text: "Cancelar",
+            style: "cancel"
+          },
+          {
+            text: "Confirmar",
+            onPress: () => {
+              const newItem = {
+                competitor: selectedStore,
+                ean: product.codigoean,
+                price: price,
+                productName: product.descricao,
+                brand: product.marca,
+                location: location,
+              };
+
+              setEanList((prevList) => [...prevList, newItem]);
+              saveEanList([...eanList, newItem]);
+
+              navigation.navigate("explore", {
+                eanList: [...eanList, newItem],
+              });
+
+              setPrice("");
+              setSearchValue("");
+            }
+          }
+        ]
+      );
+    } else {
+      Alert.alert("Aviso", "Produto não encontrado");
+    }
+  };
+
+  const formatCurrency = (value: string) => {
+    let numbers = value.replace(/\D/g, '');
+    
+    
+    let formatted = (Number(numbers) / 100).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+
+    return formatted;
+  };
+
+  const handlePriceChange = (text: string) => {
+    const numericValue = text.replace(/\D/g, '');
+    setPrice(numericValue);
   };
 
   return (
@@ -205,7 +251,7 @@ export default function HomeScreen() {
           style={styles.picker}
         >
           <Picker.Item label="Drogasil" value="Drogasil" />
-          <Picker.Item label="Bom Preço" value="Bom Preço" />
+          <Picker.Item label="Bom Preço" value="Bom Preço" />-+
           <Picker.Item label="Pague Menos" value="Pague Menos" />
           <Picker.Item label="Independente" value="Independente" />
         </Picker>
@@ -239,12 +285,35 @@ export default function HomeScreen() {
           Insira o valor de busca:
         </ThemedText>
         <View style={styles.searchContainer}>
-          <TextInput
-            onChangeText={setSearchValue}
-            style={[styles.input, { flex: 1 }]}
-            value={searchValue}
-            placeholder={`Digite o Parâmetro de Busca`}
-          />
+          <View style={styles.autocompleteContainer}>
+            <TextInput
+              onChangeText={(text) => {
+                setSearchValue(text);
+                if (searchParameter === 'descricao' || searchParameter === 'marca') {
+                  updateSuggestions(text);
+                }
+              }}
+              style={[styles.input, { flex: 1 }]}
+              value={searchValue}
+              placeholder={`Digite o Parâmetro de Busca`}
+            />
+            {suggestions.length > 0 && (searchParameter === 'descricao' || searchParameter === 'marca') && (
+              <View style={styles.suggestionsContainer}>
+                {suggestions.map((suggestion, index) => (
+                  <Pressable
+                    key={index}
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      setSearchValue(suggestion);
+                      setSuggestions([]);
+                    }}
+                  >
+                    <Text>{suggestion}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
           {searchParameter === "codigoean" && (
             <Pressable 
               style={styles.cameraButton}
@@ -280,14 +349,14 @@ export default function HomeScreen() {
 
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="subtitle" style={styles.subtitle}>
-          Insira o preço do produto:
+          Insira o preço:
         </ThemedText>
         <TextInput
           style={styles.input}
-          value={price}
-          onChangeText={setPrice}
-          placeholder="Preço"
-          keyboardType="decimal-pad"
+          value={price ? formatCurrency(price) : ''}
+          onChangeText={handlePriceChange}
+          placeholder="R$ 0,00"
+          keyboardType="numeric"
         />
       </ThemedView>
       <Pressable style={styles.button} onPress={handleConfirm}>
@@ -386,6 +455,7 @@ const styles = StyleSheet.create({
   },
   radioText: {
     marginRight: 5,
+    color: "#007933",
   },
   radioSelected: {
     width: 10,
@@ -420,5 +490,26 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 20,
     padding: 10,
+  },
+  autocompleteContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    zIndex: 1000,
+    maxHeight: 200,
+  },
+  suggestionItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
 });

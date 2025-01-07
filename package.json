@@ -1,5 +1,5 @@
 {
-  "name": "tapajosprice",
+  "name": "tapajoscollector",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
@@ -15,9 +15,11 @@
     "preset": "jest-expo"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.717.0",
+    "@aws-sdk/client-s3": "^3.723.0",
+    "@babel/plugin-transform-class-static-block": "^7.16.0",
     "@expo/vector-icons": "^14.0.2",
     "@react-native-async-storage/async-storage": "^2.1.0",
+    "@react-native-community/cli": "latest",
     "@react-native-picker/picker": "^2.10.2",
     "@react-native-vector-icons/common": "^11.0.0",
     "@react-navigation/bottom-tabs": "^7.0.0",
@@ -29,6 +31,7 @@
     "expo-blur": "~14.0.1",
     "expo-camera": "~16.0.10",
     "expo-constants": "~17.0.3",
+    "expo-device": "^7.0.1",
     "expo-file-system": "~18.0.6",
     "expo-font": "~13.0.2",
     "expo-haptics": "~14.0.0",
@@ -43,10 +46,10 @@
     "expo-symbols": "~0.2.0",
     "expo-system-ui": "~4.0.6",
     "expo-web-browser": "~14.0.1",
+    "lodash": "^4.17.21",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-native": "0.76.5",
-    "react-native-camera": "^4.2.1",
     "react-native-csv": "^0.2.0",
     "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "~2.20.2",
@@ -57,11 +60,14 @@
     "react-native-screens": "~4.1.0",
     "react-native-web": "~0.19.13",
     "react-native-webview": "13.12.5",
+    "react-number-format": "^5.4.3",
     "uuid": "^11.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@babel/plugin-transform-class-static-block": "^7.26.0",
     "@types/jest": "^29.5.12",
+    "@types/lodash": "^4.17.14",
     "@types/react": "~18.3.12",
     "@types/react-test-renderer": "^18.3.0",
     "jest": "^29.2.1",
