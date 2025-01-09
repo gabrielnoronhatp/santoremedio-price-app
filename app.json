@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TapajosPrice",
+    "name": "TapajosCollector",
     "slug": "TapajosPrice",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,7 +21,7 @@
       "backgroundColor": "#ffffff"
     },
     "android": {
-      "package": "com.tapajosprice",
+      "package": "com.tapajoscollector",
       "permissions": [
         "CAMERA",
         "android.permission.CAMERA",

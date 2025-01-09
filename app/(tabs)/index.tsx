@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Image,
   StyleSheet,
@@ -7,6 +7,8 @@ import {
   Text,
   Alert,
   Pressable,
+  FlatList,
+  TouchableOpacity,
 } from "react-native";
 import { Camera, CameraView } from "expo-camera";
 import { ThemedText } from "@/components/ThemedText";
@@ -15,46 +17,91 @@ import ParallaxScrollView from "@/components/ParallaxScrollView";
 import { Picker } from "@react-native-picker/picker";
 import { useNavigation, NavigationProp } from "@react-navigation/native";
 import "react-native-get-random-values";
-import * as Location from 'expo-location';
+import * as Location from "expo-location";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { debounce } from 'lodash';
+import { debounce, memoize } from "lodash";
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type RootStackParamList = {
-  explore: { eanList: { competitor: string; ean: string; price: string; productName?: string; brand?: string; location?: { latitude: number; longitude: number; } | null; }[] };
+  explore: {
+    eanList: {
+      competitor: string;
+      ean: string;
+      price: string;
+      productName?: string;
+      brand?: string;
+      location?: { latitude: number; longitude: number } | null;
+    }[];
+  };
 };
+
+// Nova função para buscar dados
+async function fetchDatabaseData() {
+  try {
+    const response = await fetch('https://price-app-bucket.s3.us-east-1.amazonaws.com/database/database_price.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching database:', error);
+    throw error;
+  }
+}
 
 export default function HomeScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanning, setScanning] = useState(false);
   const [ean, setEan] = useState<string>("");
-  const [price, setPrice] = useState<string>("")
-  const [selectedStore, setSelectedStore] = useState<string>("Drogasil");
+  const [price, setPrice] = useState<string>("");
+  const [selectedStore, setSelectedStore] = useState<string>("");
 
   const [eanList, setEanList] = useState<
     { competitor: string; ean: string; price: string }[]
   >([]);
 
-
   const [searchParameter, setSearchParameter] = useState<string>("ean");
   const [searchValue, setSearchValue] = useState<string>("");
-  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [location, setLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [database, setDatabase] = useState<any[]>([]);
+  const [indexedDatabase, setIndexedDatabase] = useState<Record<string, any>>(
+    {}
+  );
+  const [isDatabaseLoaded, setIsDatabaseLoaded] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [descriptionMap, setDescriptionMap] = useState<Map<string, any>>(new Map());
+  const [eanMap, setEanMap] = useState<Map<string, any>>(new Map());
+  const [brandMap, setBrandMap] = useState<Map<string, any[]>>(new Map());
+  const [idMap, setIdMap] = useState<Map<string, any>>(new Map());
+  
+   useEffect(() => {
+    fetchDatabaseData()
+      .then(data => {
+        setDatabase(data);
+        setIsDatabaseLoaded(true);
+      })
+      .catch(error => console.error('Error fetching database:', error));
+  }, []);
 
-
+  
   useEffect(() => {
     (async () => {
+      setEanList([]);
+      await AsyncStorage.removeItem("eanList");
+
       const { status } = await Camera.requestCameraPermissionsAsync();
       setHasPermission(status === "granted");
 
-    
-      const { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
-      if (locationStatus !== 'granted') {
-        Alert.alert('Permissão de localização negada');
+      const { status: locationStatus } =
+        await Location.requestForegroundPermissionsAsync();
+      if (locationStatus !== "granted") {
+        Alert.alert("Permissão de localização negada");
         return;
       }
 
@@ -63,28 +110,74 @@ export default function HomeScreen() {
         latitude: currentLocation.coords.latitude,
         longitude: currentLocation.coords.longitude,
       });
+  
 
       
-      const savedEanList = await AsyncStorage.getItem('eanList');
+      const savedEanList = await AsyncStorage.getItem("eanList");
       if (savedEanList) {
         setEanList(JSON.parse(savedEanList));
       }
 
       try {
-        const response = await fetch(
-          "https://price-app-bucket.s3.us-east-1.amazonaws.com/database/database_price.json"
-        );
-        const data = await response.json();
-        setDatabase(data);
+        const parsedData = await fetchDatabaseData();
+        console.log('Loaded data size:', parsedData.length); // Debug
+
+        // Create optimized search indexes
+        const descMap = new Map();
+        const eanMap = new Map();
+        const brandMap = new Map();
+        const idMap = new Map();
+
+        parsedData.forEach((item: any) => {
+          // Index by description (case-insensitive)
+          if (item.descricao) {
+            const descKey = item.descricao.toLowerCase();
+            descMap.set(descKey, item);
+          }
+          
+          // Index by EAN
+          if (item.codigoean) {
+            eanMap.set(item.codigoean, item);
+          }
+
+          // Index by brand
+          if (item.marca) {
+            const brandKey = item.marca.toLowerCase();
+            if (!brandMap.has(brandKey)) {
+              brandMap.set(brandKey, []);
+            }
+            brandMap.get(brandKey).push(item);
+          }
+
+          // Index by product ID
+          if (item.idprodutoint) {
+            idMap.set(item.idprodutoint.toString(), item);
+          }
+        });
+
+        console.log('Maps created with sizes:', { // Debug
+          descSize: descMap.size,
+          eanSize: eanMap.size,
+          brandSize: brandMap.size,
+          idSize: idMap.size
+        });
+
+        setDescriptionMap(descMap);
+        setEanMap(eanMap);
+        setBrandMap(brandMap);
+        setIdMap(idMap);
+        setDatabase(parsedData);
+        setIsDatabaseLoaded(true);
       } catch (error) {
-        console.error("Erro ao carregar banco de dados:", error);
+        console.error("Error loading database:", error);
+        setIsDatabaseLoaded(false);
       }
     })();
   }, []);
 
   const saveEanList = async (list: any[]) => {
     try {
-      await AsyncStorage.setItem('eanList', JSON.stringify(list));
+      await AsyncStorage.setItem("eanList", JSON.stringify(list));
     } catch (error) {
       console.error("Erro ao salvar a lista:", error);
     }
@@ -96,62 +189,101 @@ export default function HomeScreen() {
     saveEanList(updatedList);
   };
 
+
   const handleBarCodeScanned = ({ data }: { type: string; data: string }) => {
     console.log("Código de barras lido:", data);
     setEan(data);
     setScanning(false);
-    setSearchValue(data); 
-    setScanning(false); 
+    setSearchValue(data);
+    setScanning(false);
 
     setEanList((prevList) => [
       ...prevList,
       { competitor: selectedStore, ean: data, price: price },
     ]);
   };
+ 
 
   const updateSuggestions = debounce((text: string) => {
-    if (!text || text.length < 2) {
+    if (!text || text.length < 1) {
       setSuggestions([]);
       return;
     }
 
     const searchTerm = text.toLowerCase();
-    const newSuggestions = database
-      .filter((item: any) => {
-        const field = searchParameter === 'marca' ? item.marca : item.descricao;
-        return field.toLowerCase().includes(searchTerm);
-      })
-      .map((item: any) => searchParameter === 'marca' ? item.marca : item.descricao)
-      .filter((value, index, self) => self.indexOf(value) === index)
-      .slice(0, 5);
+    let results: string[] = [];
 
-    setSuggestions(newSuggestions);
-  }, 300);
+    try {
+      switch (searchParameter) {
+        case "descricao":
+          results = Array.from(descriptionMap.keys())
+            .filter(key => key.includes(searchTerm))
+            .map(key => descriptionMap.get(key).descricao)
+            .slice(0, 10);
+          break;
 
-  const handleSearch = async () => {
+        case "marca":
+          results = Array.from(brandMap.keys())
+            .filter(key => key.includes(searchTerm))
+            .map(key => brandMap.get(key)?.[0]?.marca || '')
+            .slice(0, 10);
+          break;
+
+        case "codigoean":
+          results = Array.from(eanMap.keys())
+            .filter(key => key.startsWith(searchTerm))
+            .slice(0, 10);
+          break;
+
+        case "idprodutoint":
+          results = Array.from(idMap.keys())
+            .filter(key => key.startsWith(searchTerm))
+            .slice(0, 10);
+          break;
+      }
+
+      setSuggestions(results);
+    } catch (error) {
+      console.error('Error in updateSuggestions:', error);
+      setSuggestions([]);
+    }
+  }, 300, { leading: false, trailing: true });
+
+  const [isSearching, setIsSearching] = useState(false);
+
+  const memoizedSearch = useMemo(() => {
+    return memoize((searchValue: string) => {
+      if (!searchValue) return null;
+
+      switch (searchParameter) {
+        case "descricao":
+          return descriptionMap.get(searchValue.toLowerCase());
+        
+        case "codigoean":
+          return eanMap.get(searchValue);
+        
+        case "marca":
+          const brandResults = brandMap.get(searchValue.toLowerCase());
+          return brandResults?.[0] || null;
+        
+        case "idprodutoint":
+          return idMap.get(searchValue);
+        
+        default:
+          return null;
+      }
+    });
+  }, [descriptionMap, eanMap, brandMap, idMap, searchParameter]);
+
+  const handleSearch = debounce(async () => {
     if (!searchValue) {
       Alert.alert("Aviso", "Por favor, preencha o parâmetro de busca");
       return;
     }
 
+    setIsSearching(true);
     try {
-      let product;
-      if (searchParameter === "idprodutoint") {
-        product = database.find(
-          (item: any) => item[searchParameter] === parseInt(searchValue)
-        );
-      } else if (
-        searchParameter === "descricao" ||
-        searchParameter === "marca"
-      ) {
-        product = database.find((item: any) =>
-          item[searchParameter]
-            .toLowerCase()
-            .includes(searchValue.toLowerCase())
-        );
-      } else {
-        product = database.find((item: any) => item.codigoean === searchValue);
-      }
+      const product = memoizedSearch(searchValue);
 
       if (product) {
         Alert.alert("Produto encontrado", `Produto: ${product.descricao}`);
@@ -161,86 +293,75 @@ export default function HomeScreen() {
     } catch (error) {
       console.error("Erro na busca:", error);
       Alert.alert("Erro", "Ocorreu um erro ao buscar o produto");
+    } finally {
+      setIsSearching(false);
     }
-  };
+  }, 300);
 
   const handleConfirm = () => {
     if (!searchValue || !price || !selectedStore) {
-      Alert.alert("Aviso", "Por favor, preencha todos os campos obrigatórios: código do produto, preço e loja");
+      Alert.alert(
+        "Aviso",
+        "Por favor, preencha todos os campos obrigatórios: código do produto, preço e loja"
+      );
       return;
     }
 
-    const product = database.find((item: any) => {
-      if (searchParameter === "idprodutoint") {
-        return item[searchParameter] === parseInt(searchValue);
-      } else if (searchParameter === "descricao" || searchParameter === "marca") {
-        return item[searchParameter].toLowerCase() === searchValue.toLowerCase();
-      } else {
-        return item.codigoean === searchValue;
-      }
-    });
+    const product = memoizedSearch(searchValue);
 
     if (product) {
-      Alert.alert(
-        "Confirmação",
-        "Deseja adicionar este produto à lista?",
-        [
-          {
-            text: "Cancelar",
-            style: "cancel"
+      Alert.alert("Confirmação", "Deseja adicionar este produto à lista?", [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Confirmar",
+          onPress: () => {
+            const formattedPrice = formatCurrency(price);
+            const newItem = {
+              competitor: selectedStore,
+              ean: product.codigoean,
+              price: formattedPrice,
+              productName: product.descricao,
+              brand: product.marca,
+              location: location,
+            };
+
+            setEanList((prevList) => [...prevList, newItem]);
+            saveEanList([...eanList, newItem]);
+
+            navigation.navigate("explore", {
+              eanList: [...eanList, newItem],
+            });
+
+            setPrice("");
+            setSearchValue("");
           },
-          {
-            text: "Confirmar",
-            onPress: () => {
-              const newItem = {
-                competitor: selectedStore,
-                ean: product.codigoean,
-                price: price,
-                productName: product.descricao,
-                brand: product.marca,
-                location: location,
-              };
-
-              setEanList((prevList) => [...prevList, newItem]);
-              saveEanList([...eanList, newItem]);
-
-              navigation.navigate("explore", {
-                eanList: [...eanList, newItem],
-              });
-
-              setPrice("");
-              setSearchValue("");
-            }
-          }
-        ]
-      );
+        },
+      ]);
     } else {
       Alert.alert("Aviso", "Produto não encontrado");
     }
   };
 
   const formatCurrency = (value: string) => {
-    let numbers = value.replace(/\D/g, '');
-    
-    
-    let formatted = (Number(numbers) / 100).toLocaleString('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
+    let numbers = value.replace(/\D/g, "");
+    let formatted = (Number(numbers) / 100).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
     });
 
     return formatted;
   };
 
   const handlePriceChange = (text: string) => {
-    const numericValue = text.replace(/\D/g, '');
+    const numericValue = text.replace(/\D/g, "");
     setPrice(numericValue);
   };
 
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: "#007933", dark: "#007933" }}
-      headerImage={require("@/assets/images/react-logo.png")}
-    >
+    <View>
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="subtitle" style={styles.subtitle}>
           Selecione a loja:
@@ -251,14 +372,13 @@ export default function HomeScreen() {
           style={styles.picker}
         >
           <Picker.Item label="Drogasil" value="Drogasil" />
-          <Picker.Item label="Bom Preço" value="Bom Preço" />-+
+          <Picker.Item label="Bom Preço" value="Bom Preço" />
           <Picker.Item label="Pague Menos" value="Pague Menos" />
           <Picker.Item label="Independente" value="Independente" />
         </Picker>
       </ThemedView>
 
       <ThemedView style={styles.stepContainer}>
-    
         <View style={styles.radioContainer}>
           {[
             { label: "ID", value: "idprodutoint" },
@@ -287,42 +407,59 @@ export default function HomeScreen() {
         <View style={styles.searchContainer}>
           <View style={styles.autocompleteContainer}>
             <TextInput
+              style={styles.input}
+              value={searchValue}
               onChangeText={(text) => {
                 setSearchValue(text);
-                if (searchParameter === 'descricao' || searchParameter === 'marca') {
-                  updateSuggestions(text);
-                }
+                updateSuggestions(text);
               }}
-              style={[styles.input, { flex: 1 }]}
-              value={searchValue}
-              placeholder={`Digite o Parâmetro de Busca`}
+              editable={!isSearching}
+              placeholder="Digite aqui..."
             />
-            {suggestions.length > 0 && (searchParameter === 'descricao' || searchParameter === 'marca') && (
-              <View style={styles.suggestionsContainer}>
-                {suggestions.map((suggestion, index) => (
-                  <Pressable
-                    key={index}
-                    style={styles.suggestionItem}
-                    onPress={() => {
-                      setSearchValue(suggestion);
-                      setSuggestions([]);
-                    }}
-                  >
-                    <Text>{suggestion}</Text>
-                  </Pressable>
-                ))}
+
+            {suggestions.length > 0 && (
+              <View style={styles.suggestionsWrapper}>
+                
+                  <FlatList
+                  data={suggestions}
+                  keyExtractor={(item, index) => index.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.suggestionItem}
+                      onPress={() => {
+                        setSearchValue(item);
+                        setSuggestions([]);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.suggestionText}>{item}</Text>
+                    </TouchableOpacity>
+                  )}
+                  style={styles.suggestionsContainer}
+                  contentContainerStyle={styles.suggestionsContentContainer}
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                  keyboardShouldPersistTaps="handled"
+                  maxToRenderPerBatch={10}
+                  windowSize={5}
+                  initialNumToRender={10}
+                />
               </View>
             )}
           </View>
           {searchParameter === "codigoean" && (
-            <Pressable 
+            <Pressable
               style={styles.cameraButton}
               onPress={() => setScanning(true)}
             >
               <FontAwesome name="camera" size={20} color="white" />
             </Pressable>
           )}
-          <Pressable style={styles.searchButton} onPress={handleSearch}>
+          <Pressable
+            style={styles.searchButton}
+            onPress={handleSearch}
+            disabled={!isDatabaseLoaded}
+          >
             <FontAwesome name="search" size={16} color="white" />
           </Pressable>
         </View>
@@ -334,10 +471,10 @@ export default function HomeScreen() {
             style={styles.camera}
             onBarcodeScanned={handleBarCodeScanned}
             barcodeScannerSettings={{
-              barcodeTypes: ["ean13"],
+              barcodeTypes: ["ean13", "ean8"],
             }}
           >
-            <Pressable 
+            <Pressable
               style={styles.closeButton}
               onPress={() => setScanning(false)}
             >
@@ -353,7 +490,7 @@ export default function HomeScreen() {
         </ThemedText>
         <TextInput
           style={styles.input}
-          value={price ? formatCurrency(price) : ''}
+          value={price ? formatCurrency(price) : ""}
           onChangeText={handlePriceChange}
           placeholder="R$ 0,00"
           keyboardType="numeric"
@@ -362,11 +499,9 @@ export default function HomeScreen() {
       <Pressable style={styles.button} onPress={handleConfirm}>
         <Text style={styles.buttonText}>Confirmar</Text>
       </Pressable>
-    </ParallaxScrollView>
+    </View>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   reactLogo: {
@@ -391,7 +526,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   cameraContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -484,32 +619,51 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   closeButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 20,
     right: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: "rgba(0,0,0,0.5)",
     borderRadius: 20,
     padding: 10,
   },
   autocompleteContainer: {
     flex: 1,
-    position: 'relative',
+    position: "relative",
   },
-  suggestionsContainer: {
+  suggestionsWrapper: {
     position: 'absolute',
     top: '100%',
     left: 0,
     right: 0,
+    maxHeight: 200,
     backgroundColor: 'white',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#ccc',
     zIndex: 1000,
-    maxHeight: 200,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  suggestionsContainer: {
+    flex: 1,
+  },
+  suggestionsContentContainer: {
+    flexGrow: 1,
   },
   suggestionItem: {
-    padding: 10,
+    padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    backgroundColor: 'white',
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#333',
   },
 });
