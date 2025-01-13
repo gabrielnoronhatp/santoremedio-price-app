@@ -57,13 +57,13 @@ export default function HomeScreen() {
   const [scanning, setScanning] = useState(false);
   const [ean, setEan] = useState<string>("");
   const [price, setPrice] = useState<string>("");
-  const [selectedStore, setSelectedStore] = useState<string>("");
+  const [selectedStore, setSelectedStore] = useState<string>("Indepedente");
 
   const [eanList, setEanList] = useState<
     { competitor: string; ean: string; price: string }[]
   >([]);
 
-  const [searchParameter, setSearchParameter] = useState<string>("ean");
+  const [searchParameter, setSearchParameter] = useState<string>("idprodutoint  ");
   const [searchValue, setSearchValue] = useState<string>("");
   const [location, setLocation] = useState<{
     latitude: number;
@@ -120,27 +120,27 @@ export default function HomeScreen() {
 
       try {
         const parsedData = await fetchDatabaseData();
-        console.log('Loaded data size:', parsedData.length); // Debug
+        console.log('Loaded data size:', parsedData.length); 
 
-        // Create optimized search indexes
+        
         const descMap = new Map();
         const eanMap = new Map();
         const brandMap = new Map();
         const idMap = new Map();
 
         parsedData.forEach((item: any) => {
-          // Index by description (case-insensitive)
+      
           if (item.descricao) {
             const descKey = item.descricao.toLowerCase();
             descMap.set(descKey, item);
           }
           
-          // Index by EAN
+         
           if (item.codigoean) {
             eanMap.set(item.codigoean, item);
           }
 
-          // Index by brand
+  
           if (item.marca) {
             const brandKey = item.marca.toLowerCase();
             if (!brandMap.has(brandKey)) {
@@ -149,18 +149,12 @@ export default function HomeScreen() {
             brandMap.get(brandKey).push(item);
           }
 
-          // Index by product ID
           if (item.idprodutoint) {
             idMap.set(item.idprodutoint.toString(), item);
           }
         });
 
-        console.log('Maps created with sizes:', { // Debug
-          descSize: descMap.size,
-          eanSize: eanMap.size,
-          brandSize: brandMap.size,
-          idSize: idMap.size
-        });
+     
 
         setDescriptionMap(descMap);
         setEanMap(eanMap);
@@ -183,71 +177,66 @@ export default function HomeScreen() {
     }
   };
 
-  const handleAddToEanList = (newItem: any) => {
-    const updatedList = [...eanList, newItem];
-    setEanList(updatedList);
-    saveEanList(updatedList);
-  };
 
 
   const handleBarCodeScanned = ({ data }: { type: string; data: string }) => {
-    console.log("Código de barras lido:", data);
+  
     setEan(data);
     setScanning(false);
     setSearchValue(data);
-    setScanning(false);
-
-    setEanList((prevList) => [
-      ...prevList,
-      { competitor: selectedStore, ean: data, price: price },
-    ]);
   };
- 
+
+  const handleSearchValueChange = (text: string) => {
+    setSearchValue(text);
+    setEan("");
+    updateSuggestions(text);
+  };
 
   const updateSuggestions = debounce((text: string) => {
     if (!text || text.length < 1) {
       setSuggestions([]);
       return;
     }
-
-    const searchTerm = text.toLowerCase();
+  
+    const searchTerms = text.toLowerCase().trim().split(/\s+/);
     let results: string[] = [];
-
+  
     try {
       switch (searchParameter) {
         case "descricao":
           results = Array.from(descriptionMap.keys())
-            .filter(key => key.includes(searchTerm))
+            .filter(key => searchTerms.every(term => key.includes(term))) 
             .map(key => descriptionMap.get(key).descricao)
             .slice(0, 10);
           break;
-
+  
         case "marca":
           results = Array.from(brandMap.keys())
-            .filter(key => key.includes(searchTerm))
-            .map(key => brandMap.get(key)?.[0]?.marca || '')
+            .filter(key => key.includes(searchTerms[0])) 
+            .map(key => brandMap.get(key)?.[0]?.marca || "")
             .slice(0, 10);
           break;
-
+  
         case "codigoean":
           results = Array.from(eanMap.keys())
-            .filter(key => key.startsWith(searchTerm))
+            .filter(key => key.startsWith(searchTerms[0])) 
             .slice(0, 10);
           break;
-
+  
         case "idprodutoint":
           results = Array.from(idMap.keys())
-            .filter(key => key.startsWith(searchTerm))
+            .filter(key => key.startsWith(searchTerms[0])) 
             .slice(0, 10);
           break;
       }
-
+  
       setSuggestions(results);
     } catch (error) {
-      console.error('Error in updateSuggestions:', error);
+      console.error("Error in updateSuggestions:", error);
       setSuggestions([]);
     }
   }, 300, { leading: false, trailing: true });
+  
 
   const [isSearching, setIsSearching] = useState(false);
 
@@ -257,7 +246,10 @@ export default function HomeScreen() {
 
       switch (searchParameter) {
         case "descricao":
-          return descriptionMap.get(searchValue.toLowerCase());
+          const searchWords = searchValue.toLowerCase().split(' ').filter(word => word.length > 0);
+          const matchingKeys = Array.from(descriptionMap.keys())
+            .filter(key => searchWords.every(word => key.includes(word)));
+          return matchingKeys.length > 0 ? descriptionMap.get(matchingKeys[0]) : null;
         
         case "codigoean":
           return eanMap.get(searchValue);
@@ -361,7 +353,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <View>
+    <View style={{ marginTop: 100 }}>
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="subtitle" style={styles.subtitle}>
           Selecione a loja:
@@ -383,7 +375,6 @@ export default function HomeScreen() {
           {[
             { label: "ID", value: "idprodutoint" },
             { label: "Descrição", value: "descricao" },
-            { label: "Marca", value: "marca" },
             { label: "EAN", value: "codigoean" },
           ].map((param) => (
             <Pressable
@@ -409,10 +400,7 @@ export default function HomeScreen() {
             <TextInput
               style={styles.input}
               value={searchValue}
-              onChangeText={(text) => {
-                setSearchValue(text);
-                updateSuggestions(text);
-              }}
+              onChangeText={handleSearchValueChange}
               editable={!isSearching}
               placeholder="Digite aqui..."
             />
@@ -541,6 +529,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   stepContainer: {
+    
     padding: 20,
   },
   picker: {

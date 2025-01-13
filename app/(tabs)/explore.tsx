@@ -44,6 +44,7 @@ export default function TabTwoScreen() {
 
   const eanList = route.params?.eanList || [];
   const [sanitizedEanList, setSanitizedEanList] = useState<any[]>([]);
+  const [productCache, setProductCache] = useState<Record<string, Product>>({});
 
   useEffect(() => {
     fetchAndSanitizeData(eanList);
@@ -51,17 +52,23 @@ export default function TabTwoScreen() {
 
   const fetchAndSanitizeData = async (list: any[]) => {
     try {
-      const response = await fetch('https://price-app-bucket.s3.us-east-1.amazonaws.com/database/database_price.json');
-      const products: Product[] = await response.json();
+      if (Object.keys(productCache).length === 0) {
+        const response = await fetch('https://price-app-bucket.s3.us-east-1.amazonaws.com/database/database_price.json');
+        const products: Product[] = await response.json();
+        
+        const cache: Record<string, Product> = {};
+        products.forEach(product => {
+          cache[product.codigoean] = product;
+        });
+        setProductCache(cache);
+      }
 
-      const sanitizedData = list.map(item => {
-        const product = products.find(p => p.codigoean === item.ean);
-        return {
-          ...item,
-          productName: product?.descricao || 'Produto não encontrado',
-          brand: product?.marca || ''
-        };
-      });
+      const sanitizedData = list.map(item => ({
+        ...item,
+        productName: productCache[item.ean]?.descricao || 'Produto não encontrado',
+        brand: productCache[item.ean]?.marca || ''
+      }));
+      
       setSanitizedEanList(sanitizedData);
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
