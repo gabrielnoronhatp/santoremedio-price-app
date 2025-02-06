@@ -4,9 +4,9 @@ import { useRoute } from "@react-navigation/native";
 import { RouteProp } from "@react-navigation/native";
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
-import ParallaxScrollView from "@/components/ParallaxScrollView";
+import { ThemedText } from "components/ThemedText";
+import { ThemedView } from "components/ThemedView";
+import ParallaxScrollView from "components/ParallaxScrollView";
 import { FontAwesome } from '@expo/vector-icons';
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import * as Device from 'expo-device';
@@ -77,7 +77,7 @@ export default function TabTwoScreen() {
   };
 
   const convertToCSV = (data: any[]) => {
-    const headers = ['Localization', 'Concorrente', 'IDProduto', 'PreçoColetado', 'NomeProduto', 'Marca'];
+    const headers = ['Localization', 'Concorrente', 'IDProduto', 'PrecoColetado', 'NomeProduto', 'Marca'];
     
     const rows = data.map(item => [
       item.location ? `${item.location.latitude},${item.location.longitude}` : "N/A",
@@ -161,7 +161,7 @@ export default function TabTwoScreen() {
   return (
     <>
       <ParallaxScrollView
-        headerImage={require('@/assets/images/react-logo.png')}
+        headerImage={require('assets/images/react-logo.png')}
         headerBackgroundColor={{ dark: '#007933', light: '#007933' }}
       >
         {sanitizedEanList.map((item, index) => (
@@ -170,7 +170,7 @@ export default function TabTwoScreen() {
             <ThemedText>Marca: {item.brand}</ThemedText>
             <ThemedText>Concorrente: {item.competitor}</ThemedText>
             <ThemedText>EAN: {item.ean}</ThemedText>
-            <ThemedText>Preço: {formatCurrency(item.price)}</ThemedText>
+            <ThemedText>Preco: {formatCurrency(item.price)}</ThemedText>
           </ThemedView>
         ))}
       </ParallaxScrollView>

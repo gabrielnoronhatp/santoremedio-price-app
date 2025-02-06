@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
+    "scheme": "tapajoscollector",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -67,7 +67,8 @@
           "savePhotosPermission": "O aplicativo precisa de permissão para salvar arquivos na sua galeria.",
           "isAccessMediaLocationEnabled": true
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
