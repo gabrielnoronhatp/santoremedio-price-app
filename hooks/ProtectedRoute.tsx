@@ -1,5 +1,4 @@
-// ProtectedRoute.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from './store';
 import { useRouter, useSegments } from 'expo-router';
@@ -7,24 +6,38 @@ import { useRouter, useSegments } from 'expo-router';
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const user = useSelector((state: RootState) => state.auth.user);
   const router = useRouter();
-  const segments:any = useSegments();
+  const segments = useSegments();
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    // Se os segmentos ainda não estiverem prontos, não tenta navegar
-    if (segments.length === 0) return;
+    setIsMounted(true);
+  }, []);
 
-    // Se o usuário não estiver logado e não estiver na tela de login, redireciona com um pequeno delay
-    if (!user && segments[0] !== 'login') {
-      setTimeout(() => {
+  useEffect(() => {
+    if (isMounted && segments.length > 0) {
+      console.log('Segmentos da rota atual:', segments);
+
+      const isLoginRoute = segments[0] === 'login';
+
+      // Se o usuário não estiver logado e não estiver na tela de login, redirecione para o login
+      if (!user && !isLoginRoute) {
+        console.log('Usuário não logado. Redirecionando para /login.');
         router.replace('/login');
-      }, 0);
-    }
-  }, [user, segments]);
+      }
 
-  // Enquanto o usuário não estiver definido, retorne null (ou um loader, se preferir)
+      // Se o usuário estiver logado e estiver na tela de login, redirecione para a home
+      if (user && isLoginRoute) {
+        console.log('Usuário logado. Redirecionando para /(tabs).');
+        router.replace('/(tabs)');
+      }
+    }
+  }, [user, segments, isMounted, router]);
+
   if (!user) {
-    return null;
+    console.log('Usuário não logado. Renderizando null.');
+    return null; // Ou um componente de loading, se preferir
   }
 
+  console.log('Usuário logado. Renderizando children.');
   return <>{children}</>;
 }

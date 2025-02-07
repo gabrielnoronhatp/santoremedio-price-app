@@ -5,17 +5,14 @@ import {
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Slot, Stack } from "expo-router";
-
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { AuthProvider } from "hooks/useAuth";
 import React from "react";
 import { useEffect } from "react";
 import { useColorScheme } from "react-native";
 import "react-native-reanimated";
 import { Provider } from "react-redux";
 import store from "hooks/store";
-import ProtectedRoute from "hooks/ProtectedRoute";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,10 +37,9 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Slot />
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" options={{ headerShown: false }} />
         </Stack>
-
-       
         <StatusBar style="auto" />
       </ThemeProvider>
     </Provider>

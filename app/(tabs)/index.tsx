@@ -30,6 +30,7 @@ import { login } from "hooks/authSlice";
 import * as LinkingExpo from "expo-linking";
 import ProtectedRoute from "hooks/ProtectedRoute";
 
+
 type RootStackParamList = {
   explore: {
     eanList: {
@@ -135,7 +136,7 @@ export default function HomeScreen() {
 
       try {
         const parsedData = await fetchDatabaseData();
-        console.log("Loaded data size:", parsedData.length);
+       
 
         const descMap = new Map();
         const eanMap = new Map();
@@ -182,7 +183,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const handleDeepLink = (event: { url: string }) => {
-      console.log("Deep link URL recebida:", event.url);
+    
       // Aqui você pode processar a URL, por exemplo, extrair parâmetros de query
     };
 
@@ -201,36 +202,7 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const handleLogin = async () => {
-    try {
-      const redirectUri = makeRedirectUri();
-      const authUrl = `https://sso.grupotapajos.com.br/login`;
-
-      const [request, response, promptAsync] = useAuthRequest(
-        {
-          clientId: "1000000000000-0000000000000000000000000000000",
-          scopes: ["openid", "profile", "email"],
-          redirectUri,
-        },
-        discovery
-      );
-
-      const result = await promptAsync();
-
-      if (result.type === "success") {
-        await AsyncStorage.setItem(
-          "authToken",
-          result?.authentication?.accessToken || ""
-        );
-        setIsAuthenticated(true);
-      } else {
-        Alert.alert("Erro", "Falha na autenticação");
-      }
-    } catch (error) {
-      console.error("Erro na autenticação:", error);
-      Alert.alert("Erro", "Ocorreu um erro ao tentar autenticar");
-    }
-  };
+ 
 
   const saveEanList = async (list: any[]) => {
     try {

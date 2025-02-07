@@ -1,11 +1,17 @@
-import { Link, Stack } from 'expo-router';
+import { Link, Stack, useRouter } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
 import { ThemedText } from 'components/ThemedText';
 import { ThemedView } from 'components/ThemedView';
 import React from 'react';
-
+import { useSegments } from 'expo-router';
 export default function NotFoundScreen() {
+
+ /// aqui eu quero ver a rota que o usuario esta tentando acessar
+ const segments = useSegments();
+ const pathname = segments[0];
+ console.log('pathname', pathname);
+
   return (
     <>
       <Stack.Screen options={{ title: 'Oops!' }} />

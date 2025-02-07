@@ -4,7 +4,10 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 interface User {
   token: string;
   name: string;
+  email: string;
+  profilePicture: string;
 }
+
 
 interface AuthState {
   user: User | null;
