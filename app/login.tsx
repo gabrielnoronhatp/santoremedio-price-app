@@ -5,7 +5,9 @@ import { useDispatch } from 'react-redux';
 import { login } from 'hooks/authSlice';
 import { useNavigation } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import jwt_decode from 'jwt-decode';
+import { jwtDecode } from "jwt-decode";  
+
+
 
 export default function LoginScreen() {
   const dispatch = useDispatch();
@@ -20,38 +22,28 @@ export default function LoginScreen() {
     {
       clientId: "4ca15e42-c2a0-41df-81cd-58f485551533",
       redirectUri: redirectUri,
-      scopes: ["openid", "profile", "email" ],
+      scopes: ["openid", "profile", "email"],
     },
     {
       authorizationEndpoint: "https://sso.grupotapajos.com.br/loginss",
     }
   );
-  function decodeJWT(token: string): any {
-    try {
-      const payload = token.split('.')[1];
-      const decoded = atob(payload);
-      return JSON.parse(decoded);
-    } catch (error) {
-      console.error('Erro ao decodificar JWT:', error);
-      return null;
-    }
-  }
-  
-  // Uso:
-  
+
   useEffect(() => {
     if (response) {
-      console.log('Response:', response);
+    
+      if (response.type === "error") {
+        const url = response.url;
+        const token:any = url.split('/').pop(); 
+        const decodedToken: any =  jwtDecode(token);
 
-      if (response) {
-        // Extrai o token da URL
-        const token = response?.error.url
-
-        if (token) {
+        if (decodedToken) {
           console.log('Token recebido:', token);
           try {
-            const decodedToken = decodeJWT(token);
-            // Supondo que o token decodificado contenha os campos: nome, email e foto_perfil_url
+            
+            console.log('Token decodificado:', decodedToken);
+            console.log('Usuário logado com sucesso:', decodedToken.email);
+ 
             dispatch(
               login({
                 token,
@@ -60,14 +52,14 @@ export default function LoginScreen() {
                 profilePicture: decodedToken.foto_perfil_url,
               })
             );
-            router.replace('/(tabs)'); // Redireciona para a tela inicial
+            router.replace('/(tabs)');  
           } catch (error) {
-            console.error('Erro ao decodificar o token:', error);
+            console.error('Erro ao processar o token:', error);
           }
         } else {
           console.log('Token não encontrado na resposta.');
         }
-      } else if (response.type === "error") {
+      } else if (response.type === "success") {
         console.log('Erro na autenticação:', response.error);
       }
     }
