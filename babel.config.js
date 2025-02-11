@@ -3,8 +3,12 @@ module.exports = function (api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      
+
       '@babel/plugin-transform-class-static-block',
+      'react-native-reanimated/plugin',
+      'module:react-native-dotenv',
+
+     
       ['module-resolver', {
         root: ['./'],
         alias: {

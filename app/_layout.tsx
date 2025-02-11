@@ -1,3 +1,5 @@
+import React from "react";
+import { useEffect } from "react";
 import {
   DarkTheme,
   DefaultTheme,
@@ -7,8 +9,6 @@ import { useFonts } from "expo-font";
 import { Slot, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import React from "react";
-import { useEffect } from "react";
 import { useColorScheme } from "react-native";
 import "react-native-reanimated";
 import { Provider } from "react-redux";
