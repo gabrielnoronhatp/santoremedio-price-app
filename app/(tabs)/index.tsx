@@ -20,16 +20,9 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { debounce, memoize } from "lodash";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as WebBrowser from "expo-web-browser";
-import * as AuthSession from "expo-auth-session";
-import { useAuthRequest, makeRedirectUri } from "expo-auth-session";
-import { discovery } from "expo-auth-session/build/providers/Google";
 import { ThemedView } from "components/ThemedView";
 import { ThemedText } from "components/ThemedText";
 import { useDispatch, useSelector } from "react-redux";
-import { login } from "hooks/authSlice";
-import * as LinkingExpo from "expo-linking";
-import ProtectedRoute from "hooks/ProtectedRoute";
-
 type RootStackParamList = {
   explore: {
     eanList: {
@@ -61,11 +54,10 @@ async function fetchDatabaseData() {
 
 WebBrowser.maybeCompleteAuthSession();
 
-
 export default function HomeScreen() {
   const dispatch = useDispatch();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-  const authUser = useSelector((state: any) => state.auth.user);
+
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanning, setScanning] = useState(false);
   const [ean, setEan] = useState<string>("");
@@ -178,17 +170,13 @@ export default function HomeScreen() {
     })();
   }, []);
 
-
-
   useEffect(() => {
     const handleDeepLink = (event: { url: string }) => {
       console.log("Deep link URL recebida:", event.url);
-      // Aqui você pode processar a URL, por exemplo, extrair parâmetros de query
     };
 
     const subscription = Linking.addEventListener("url", handleDeepLink);
 
-    // Opcional: Se o app já foi aberto via deep link, recupera a URL inicial
     (async () => {
       const initialUrl = await Linking.getInitialURL();
       if (initialUrl) {
@@ -200,37 +188,6 @@ export default function HomeScreen() {
       subscription.remove();
     };
   }, []);
-
-  const handleLogin = async () => {
-    try {
-      const redirectUri = makeRedirectUri();
-      const authUrl = `https://sso.grupotapajos.com.br/login`;
-
-      const [request, response, promptAsync] = useAuthRequest(
-        {
-          clientId: "1000000000000-0000000000000000000000000000000",
-          scopes: ["openid", "profile", "email"],
-          redirectUri,
-        },
-        discovery
-      );
-
-      const result = await promptAsync();
-
-      if (result.type === "success") {
-        await AsyncStorage.setItem(
-          "authToken",
-          result?.authentication?.accessToken || ""
-        );
-        setIsAuthenticated(true);
-      } else {
-        Alert.alert("Erro", "Falha na autenticação");
-      }
-    } catch (error) {
-      console.error("Erro na autenticação:", error);
-      Alert.alert("Erro", "Ocorreu um erro ao tentar autenticar");
-    }
-  };
 
   const saveEanList = async (list: any[]) => {
     try {
@@ -419,15 +376,25 @@ export default function HomeScreen() {
     setPrice(numericValue);
   };
 
-
+  const handleSyncDatabase = async () => {
+    try {
+      const data = await fetchDatabaseData();
+      setDatabase(data);
+      setIsDatabaseLoaded(true);
+      Alert.alert("Sucesso", "Base de dados sincronizada com sucesso!");
+    } catch (error) {
+      console.error("Erro ao sincronizar a base de dados:", error);
+      Alert.alert("Erro", "Não foi possível sincronizar a base de dados.");
+    }
+  };
 
   return (
-    <ProtectedRoute>
-      <View style={{ marginTop: 100 }}>
-        <ThemedView style={styles.stepContainer}>
-          <ThemedText type="subtitle" style={styles.subtitle}>
-            Selecione a loja:
-          </ThemedText>
+    <View style={{ marginTop: 100 }}>
+      <ThemedView style={styles.stepContainer}>
+        <ThemedText type="subtitle" style={styles.subtitle}>
+          Selecione a loja:
+        </ThemedText>
+        <View style={styles.storeSelectionContainer}>
           <Picker
             selectedValue={selectedStore}
             onValueChange={(itemValue) => setSelectedStore(itemValue)}
@@ -438,132 +405,139 @@ export default function HomeScreen() {
             <Picker.Item label="Pague Menos" value="Pague Menos" />
             <Picker.Item label="Independente" value="Independente" />
           </Picker>
-        </ThemedView>
-
-        <ThemedView style={styles.stepContainer}>
-          <View style={styles.radioContainer}>
-            {[
-              { label: "ID", value: "idprodutoint" },
-              { label: "Descrição", value: "descricao" },
-              { label: "EAN", value: "codigoean" },
-            ].map((param) => (
-              <Pressable
-                key={param.value}
-                style={styles.radioButton}
-                onPress={() => setSearchParameter(param.value)}
-              >
-                <Text style={styles.radioText}>{param.label}</Text>
-                {searchParameter === param.value && (
-                  <View style={styles.radioSelected} />
-                )}
-              </Pressable>
-            ))}
-          </View>
-        </ThemedView>
-
-        <ThemedView style={styles.stepContainer}>
-          <ThemedText type="subtitle" style={styles.subtitle}>
-            Insira o valor de busca:
-          </ThemedText>
-          <View style={styles.searchContainer}>
-            <View style={styles.autocompleteContainer}>
-              <TextInput
-                style={styles.input}
-                value={searchValue}
-                onChangeText={handleSearchValueChange}
-                editable={!isSearching}
-                placeholder="Digite aqui..."
-              />
-
-              {suggestions.length > 0 && (
-                <View style={styles.suggestionsWrapper}>
-                  <FlatList
-                    data={suggestions}
-                    keyExtractor={(item, index) => index.toString()}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity
-                        style={styles.suggestionItem}
-                        onPress={() => {
-                          setSearchValue(item);
-                          setSuggestions([]);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.suggestionText}>{item}</Text>
-                      </TouchableOpacity>
-                    )}
-                    style={styles.suggestionsContainer}
-                    contentContainerStyle={styles.suggestionsContentContainer}
-                    nestedScrollEnabled={true}
-                    showsVerticalScrollIndicator={true}
-                    keyboardShouldPersistTaps="handled"
-                    maxToRenderPerBatch={10}
-                    windowSize={5}
-                    initialNumToRender={10}
-                  />
-                </View>
-              )}
-            </View>
-            {searchParameter === "codigoean" && (
-              <Pressable
-                style={styles.cameraButton}
-                onPress={() => setScanning(true)}
-              >
-                <FontAwesome name="camera" size={20} color="white" />
-              </Pressable>
-            )}
+          <View style={styles.syncContainer}>
             <Pressable
-              style={styles.searchButton}
-              onPress={handleSearch}
-              disabled={!isDatabaseLoaded}
+              style={styles.syncIconButton}
+              onPress={handleSyncDatabase}
             >
-              <FontAwesome name="search" size={16} color="white" />
+              <FontAwesome name="rotate-right" size={24} color="#007933" />
             </Pressable>
+            <Text style={styles.syncLabel}>Sincronizar</Text>
           </View>
-        </ThemedView>
+        </View>
+      </ThemedView>
 
-        {scanning && (
-          <View style={styles.cameraContainer}>
-            <CameraView
-              style={styles.camera}
-              onBarcodeScanned={handleBarCodeScanned}
-              barcodeScannerSettings={{
-                barcodeTypes: ["ean13", "ean8"],
-              }}
+      <ThemedView style={styles.stepContainer}>
+        <View style={styles.radioContainer}>
+          {[
+            { label: "ID", value: "idprodutoint" },
+            { label: "Descrição", value: "descricao" },
+            { label: "EAN", value: "codigoean" },
+          ].map((param) => (
+            <Pressable
+              key={param.value}
+              style={styles.radioButton}
+              onPress={() => setSearchParameter(param.value)}
             >
-              <Pressable
-                style={styles.closeButton}
-                onPress={() => setScanning(false)}
-              >
-                <FontAwesome name="close" size={24} color="white" />
-              </Pressable>
-            </CameraView>
+              <Text style={styles.radioText}>{param.label}</Text>
+              {searchParameter === param.value && (
+                <View style={styles.radioSelected} />
+              )}
+            </Pressable>
+          ))}
+        </View>
+      </ThemedView>
+
+      <ThemedView style={styles.stepContainer}>
+        <ThemedText type="subtitle" style={styles.subtitle}>
+          Insira o valor de busca:
+        </ThemedText>
+        <View style={styles.searchContainer}>
+          <View style={styles.autocompleteContainer}>
+            <TextInput
+              style={styles.input}
+              value={searchValue}
+              onChangeText={handleSearchValueChange}
+              editable={!isSearching}
+              placeholder="Digite aqui..."
+            />
+
+            {suggestions.length > 0 && (
+              <View style={styles.suggestionsWrapper}>
+                <FlatList
+                  data={suggestions}
+                  keyExtractor={(item, index) => index.toString()}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.suggestionItem}
+                      onPress={() => {
+                        setSearchValue(item);
+                        setSuggestions([]);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.suggestionText}>{item}</Text>
+                    </TouchableOpacity>
+                  )}
+                  style={styles.suggestionsContainer}
+                  contentContainerStyle={styles.suggestionsContentContainer}
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                  keyboardShouldPersistTaps="handled"
+                  maxToRenderPerBatch={10}
+                  windowSize={5}
+                  initialNumToRender={10}
+                />
+              </View>
+            )}
           </View>
-        )}
+          {searchParameter === "codigoean" && (
+            <Pressable
+              style={styles.cameraButton}
+              onPress={() => setScanning(true)}
+            >
+              <FontAwesome name="camera" size={20} color="white" />
+            </Pressable>
+          )}
+          <Pressable
+            style={styles.searchButton}
+            onPress={handleSearch}
+            disabled={!isDatabaseLoaded}
+          >
+            <FontAwesome name="search" size={16} color="white" />
+          </Pressable>
+        </View>
+      </ThemedView>
 
-        <ThemedView style={styles.stepContainer}>
-          <ThemedText type="subtitle" style={styles.subtitle}>
-            Insira o preço:
-          </ThemedText>
-          <TextInput
-            style={styles.input}
-            value={price ? formatCurrency(price) : ""}
-            onChangeText={handlePriceChange}
-            placeholder="R$ 0,00"
-            keyboardType="numeric"
-          />
-        </ThemedView>
-        <Pressable
-          style={styles.button}
-          onPress={handleConfirm}
-          disabled={!productFound || !price || !selectedStore}
-        >
-          <Text style={styles.buttonText}>Confirmar</Text>
-        </Pressable>
+      {scanning && (
+        <View style={styles.cameraContainer}>
+          <CameraView
+            style={styles.camera}
+            onBarcodeScanned={handleBarCodeScanned}
+            barcodeScannerSettings={{
+              barcodeTypes: ["ean13", "ean8"],
+            }}
+          >
+            <Pressable
+              style={styles.closeButton}
+              onPress={() => setScanning(false)}
+            >
+              <FontAwesome name="close" size={24} color="white" />
+            </Pressable>
+          </CameraView>
+        </View>
+      )}
 
-        
-      </View>
-    </ProtectedRoute>
+      <ThemedView style={styles.stepContainer}>
+        <ThemedText type="subtitle" style={styles.subtitle}>
+          Insira o preço:
+        </ThemedText>
+        <TextInput
+          style={styles.input}
+          value={price ? formatCurrency(price) : ""}
+          onChangeText={handlePriceChange}
+          placeholder="R$ 0,00"
+          keyboardType="numeric"
+        />
+      </ThemedView>
+      <Pressable
+        style={styles.button}
+        onPress={handleConfirm}
+        disabled={!productFound || !price || !selectedStore}
+      >
+        <Text style={styles.buttonText}>Confirmar</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -745,11 +719,29 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ssoButton: {
-    backgroundColor: "#004d99", 
+    backgroundColor: "#004d99",
     paddingVertical: 15,
     borderRadius: 8,
     alignItems: "center",
     marginHorizontal: 20,
     marginTop: 10,
+  },
+  storeSelectionContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  syncContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 5,
+  },
+  syncIconButton: {
+    marginRight: 5,
+  },
+  syncLabel: {
+    marginLeft: 5,
+    color: "#007933",
+    fontSize: 14,
   },
 });

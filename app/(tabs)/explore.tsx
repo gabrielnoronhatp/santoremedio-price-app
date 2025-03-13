@@ -20,7 +20,6 @@ interface Product {
 
 const formatCurrency = (value: string) => {
   let numbers = value.replace(/\D/g, '');
-  
   let formatted = (Number(numbers) / 100).toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
